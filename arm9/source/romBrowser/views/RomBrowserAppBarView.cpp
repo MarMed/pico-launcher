@@ -4,6 +4,7 @@
 #include "gui/VramContext.h"
 #include "gui/input/TouchEvent.h"
 #include "backIcon.h"
+#include "searchIcon.h"
 #include "settingsIcon.h"
 #include "heartIcon.h"
 #include "hGridIcon.h"
@@ -23,12 +24,16 @@ RomBrowserAppBarView::RomBrowserAppBarView(
     const IRomBrowserViewFactory* romBrowserViewFactory)
     : _viewModel(viewModel)
 {
-    _appBarView = displayMode.CreateAppBarView(romBrowserViewFactory, 1, 4);
+    _appBarView = displayMode.CreateAppBarView(romBrowserViewFactory, 1, 5);
     _appBarView->SetParent(this);
 
     _appBarView->SetButtonAction(APP_BAR_BUTTON_BACK, [] (IconButtonView* sender, void* arg)
     {
         ((RomBrowserAppBarViewModel*)arg)->NavigateUp();
+    }, _viewModel);
+    _appBarView->SetButtonAction(APP_BAR_BUTTON_SEARCH, [] (IconButtonView* sender, void* arg)
+    {
+        ((RomBrowserAppBarViewModel*)arg)->ShowSearch();
     }, _viewModel);
     _appBarView->SetButtonAction(APP_BAR_BUTTON_DISPLAY_SETTINGS, [] (IconButtonView* sender, void* arg)
     {
@@ -72,6 +77,10 @@ void RomBrowserAppBarView::InitVram(const VramContext& vramContext)
         u32 backIconVramOffset = objVramManager->Alloc(backIconTilesLen);
         dma_ntrCopy32(3, backIconTiles, objVramManager->GetVramAddress(backIconVramOffset), backIconTilesLen);
         _appBarView->SetButtonIcon(APP_BAR_BUTTON_BACK, backIconVramOffset);
+
+        u32 searchIconVramOffset = objVramManager->Alloc(searchIconTilesLen);
+        dma_ntrCopy32(3, searchIconTiles, objVramManager->GetVramAddress(searchIconVramOffset), searchIconTilesLen);
+        _appBarView->SetButtonIcon(APP_BAR_BUTTON_SEARCH, searchIconVramOffset);
 
         u32 settingsIconVramOffset = objVramManager->Alloc(settingsIconTilesLen);
         dma_ntrCopy32(3, settingsIconTiles, objVramManager->GetVramAddress(settingsIconVramOffset), settingsIconTilesLen);
@@ -158,6 +167,11 @@ void RomBrowserAppBarView::InitVram(const VramContext& vramContext)
 
 void RomBrowserAppBarView::Update()
 {
+    _appBarView->SetButtonState(APP_BAR_BUTTON_SEARCH,
+        _viewModel->HasActiveSearch()
+            ? IconButtonView::State::ToggleSelected
+            : IconButtonView::State::ToggleUnselected);
+
     _appBarView->SetButtonState(APP_BAR_BUTTON_FAVORITES,
         _viewModel->IsFavoritesViewActive()
             ? IconButtonView::State::ToggleSelected
@@ -194,7 +208,6 @@ void RomBrowserAppBarView::Update()
             _appBarView->SetButtonIcon(APP_BAR_BUTTON_SORT_MODE, _sortIconNameAscendingVramOffset);
             break;
     }
-
     _appBarView->Update();
 }
 
@@ -224,7 +237,6 @@ View* RomBrowserAppBarView::MoveFocus(View* currentFocus, FocusMoveDirection dir
     }
     return nullptr;
 }
-
 bool RomBrowserAppBarView::HandleTouch(const TouchEvent& event, FocusManager& focusManager)
 {
     static constexpr int TOUCH_INFLATE = 16;

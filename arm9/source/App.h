@@ -23,6 +23,7 @@
 #include "themes/material/MaterialColorScheme.h"
 #include "romBrowser/viewModels/RomBrowserBottomScreenViewModel.h"
 #include "romBrowser/viewModels/DisplaySettingsViewModel.h"
+#include "romBrowser/viewModels/SearchViewModel.h"
 #include "romBrowser/views/RomBrowserBottomScreenView.h"
 #include "romBrowser/views/RomBrowserTopScreenView.h"
 #include "romBrowser/views/IconButton2DView.h"
@@ -94,6 +95,7 @@ private:
     RomBrowserController _romBrowserController;
 
     DisplaySettingsViewModel _displaySettingsBottomSheetViewModel;
+    SearchViewModel _searchBottomSheetViewModel;
     LayoutService _layoutService;
 
     FocusManager _focusManager;
@@ -149,6 +151,8 @@ private:
     void HandleHideCheatDescriptionTrigger();
     void HandleShowDisplaySettingsTrigger();
     void HandleHideDisplaySettingsTrigger();
+    void HandleShowSearchTrigger();
+    void HandleHideSearchTrigger();
     void HandleShowDisplayInfoTrigger();
     void HandleHideDisplayInfoTrigger();
     void HandleShowLayoutEditorTrigger();
@@ -159,6 +163,8 @@ private:
     void HandleFolderLoadDoneTrigger();
     void HandleRomBrowserViewModelInvalidated();
     void HandleChangeDisplayModeTrigger(RomBrowserState newState);
+    void HandleChangeSearchQueryTrigger();
+    void RefreshRomBrowserViews();
     void ClearRetainedRomBrowserFocus(bool includeAppBar);
     void RestoreDirectMenuAccessFocus();
     void DrainTaskQueues();
@@ -174,7 +180,6 @@ private:
 
     void StoreVramState(VramState& vramState) const;
     void RestoreVramState(const VramState& vramState);
-
     static constexpr int kMaxThemeCount = 64;
     std::array<String<char, 64>, kMaxThemeCount> _themeNames;
     int _themeCount = 0;

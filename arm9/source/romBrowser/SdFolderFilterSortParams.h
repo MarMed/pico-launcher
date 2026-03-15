@@ -7,9 +7,11 @@ class SdFolderFilterSortParams
 public:
     SdFolderSortType sortType = SdFolderSortType::Name;
     SdFolderSortDirection sortDirection = SdFolderSortDirection::Ascending;
+    const char* searchQuery = nullptr;
 
     SdFolderFilterSortParams() { }
 
-    SdFolderFilterSortParams(SdFolderSortType sortType, SdFolderSortDirection sortDirection)
-        : sortType(sortType), sortDirection(sortDirection) { }
+    SdFolderFilterSortParams(
+        SdFolderSortType sortType, SdFolderSortDirection sortDirection, const char* searchQuery = nullptr)
+        : sortType(sortType), sortDirection(sortDirection), searchQuery(searchQuery) { }
 };

@@ -1,5 +1,6 @@
 #include "common.h"
 #include <array>
+#include <string.h>
 #include "picoLoaderBootstrap.h"
 #include "core/StringUtil.h"
 #include "PicoLoaderProcess.h"
@@ -47,6 +48,7 @@ void RomBrowserController::NavigateToPath(const TCHAR* name)
         _metadataScanTask.CancelTask();
     _favoritesViewActive = false;
     StringUtil::Copy(_navigatePath, name, sizeof(_navigatePath) / sizeof(_navigatePath[0]));
+    ClearSearchQuery();
     _stateMachine.Fire(RomBrowserStateTrigger::Navigate);
 }
 
@@ -68,6 +70,16 @@ void RomBrowserController::ShowGameInfo(const FileInfo& fileInfo)
 void RomBrowserController::HideGameInfo()
 {
     _stateMachine.Fire(RomBrowserStateTrigger::HideGameInfo);
+}
+
+void RomBrowserController::ShowSearch()
+{
+    _stateMachine.Fire(RomBrowserStateTrigger::ShowSearch);
+}
+
+void RomBrowserController::HideSearch()
+{
+    _stateMachine.Fire(RomBrowserStateTrigger::HideSearch);
 }
 
 void RomBrowserController::ShowCheats()
@@ -247,6 +259,19 @@ bool RomBrowserController::IsSelectedFileFavorite()
     return IsFavoritePath(fullPath);
 }
 
+void RomBrowserController::SetSearchQuery(const char* query)
+{
+    char clampedQuery[SEARCH_QUERY_MAX_LENGTH + 1];
+    StringUtil::Copy(clampedQuery, query, sizeof(clampedQuery));
+    if (strcmp(_searchQuery, clampedQuery) == 0)
+    {
+        return;
+    }
+
+    StringUtil::Copy(_searchQuery, clampedQuery, sizeof(_searchQuery));
+    _stateMachine.Fire(RomBrowserStateTrigger::ChangeSearchQuery);
+}
+
 void RomBrowserController::Update()
 {
     _stateMachine.Update();
@@ -280,6 +305,7 @@ void RomBrowserController::Update()
             break;
         }
         case RomBrowserState::Launching:
+        case RomBrowserState::Search:
         default:
         {
             break;
@@ -311,6 +337,10 @@ void RomBrowserController::HandleTrigger()
 
         case RomBrowserStateTrigger::ChangeDisplayMode:
             HandleChangeDisplayModeTrigger();
+            break;
+
+        case RomBrowserStateTrigger::ChangeSearchQuery:
+            HandleChangeSearchQueryTrigger();
             break;
 
         default:
@@ -466,6 +496,7 @@ void RomBrowserController::HandleLaunchTrigger()
         loadParams->argumentsLength = 0;
         if (_launchFileInfo.GetFileType()->TrySetLaunchParameters(loadParams, _navigatePath))
         {
+            ClearSearchQuery();
             gProcessManager.Goto<PicoLoaderProcess>();
         }
         else
@@ -479,7 +510,35 @@ void RomBrowserController::HandleLaunchTrigger()
 void RomBrowserController::HandleChangeDisplayModeTrigger()
 {
     LOG_DEBUG("RomBrowserStateTrigger::ChangeDisplayMode\n");
-    _romBrowserViewModel = SharedPtr(new RomBrowserViewModel(this));
+    _romBrowserViewModel = SharedPtr(new RomBrowserViewModel(this, GetSelectedFileName()));
+}
+
+void RomBrowserController::HandleChangeSearchQueryTrigger()
+{
+    LOG_DEBUG("RomBrowserStateTrigger::ChangeSearchQuery\n");
+    _romBrowserViewModel = SharedPtr(new RomBrowserViewModel(this, GetSelectedFileName()));
+}
+
+void RomBrowserController::ClearSearchQuery()
+{
+    _searchQuery[0] = 0;
+}
+
+const char* RomBrowserController::GetSelectedFileName() const
+{
+    if (!_romBrowserViewModel.IsValid())
+    {
+        return nullptr;
+    }
+
+    int selectedItem = _romBrowserViewModel->GetSelectedItem();
+    const auto& fileInfoManager = _romBrowserViewModel->GetFileInfoManager();
+    if (selectedItem < 0 || selectedItem >= (int)fileInfoManager.GetItemCount())
+    {
+        return nullptr;
+    }
+
+    return fileInfoManager.GetItem(selectedItem).GetFileName();
 }
 
 void RomBrowserController::StartFavoritesLoad()

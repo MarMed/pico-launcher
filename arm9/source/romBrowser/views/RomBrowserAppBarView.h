@@ -39,6 +39,7 @@ public:
     enum AppBarButton
     {
         APP_BAR_BUTTON_BACK = 0,
+        APP_BAR_BUTTON_SEARCH,
         APP_BAR_BUTTON_FAVORITES,
         APP_BAR_BUTTON_SORT_MODE,
         APP_BAR_BUTTON_LAYOUT,

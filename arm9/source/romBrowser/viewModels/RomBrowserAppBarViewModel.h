@@ -35,6 +35,11 @@ public:
         _romBrowserController->ShowDisplaySettings();
     }
 
+    void ShowSearch()
+    {
+        _romBrowserController->ShowSearch();
+    }
+
     void ToggleFavoritesView()
     {
         _romBrowserController->ToggleFavoritesView();
@@ -84,6 +89,11 @@ public:
     constexpr RomBrowserLayout GetRomBrowserLayout() const
     {
         return _romBrowserController->GetRomBrowserDisplaySettings().layout;
+    }
+
+    bool HasActiveSearch() const
+    {
+        return _romBrowserController->GetSearchQuery()[0] != 0;
     }
 
     constexpr RomBrowserSortMode GetRomBrowserSortMode() const

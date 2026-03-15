@@ -12,10 +12,22 @@ From here you can browse your SD card to launch homebrew and games.
 - A: Open a folder, or to launch a homebrew or game.
 - B: Go to the parent folder or close a menu.
 - L and R: Scroll quickly when there are many items in a folder.
+- Search button: Open in-folder search from the app bar.
 
 The back arrow on the top left of the bottom screen can also be used to go up to the parent folder.
 
 Please note that touch functionality is not supported yet.
+
+## Search
+Search can be opened from the magnifying glass icon in the app bar. It filters the current folder in real time using the filename only.
+
+- DPAD: Move around the on-screen keyboard.
+- A: Add the selected character or activate the selected action.
+- B: Close search while keeping the current filter active.
+- X: Clear the entire search query.
+- Y: Delete the last character.
+
+Search only applies to the current folder. It is cleared automatically when you navigate to another folder or launch a file.
 
 ## Settings menu
 The settings menu can be accessed by using the DPAD to move the selector to the cogwheel icon and pressing A. When in the settings menu, press the B button will to return to the file browser.

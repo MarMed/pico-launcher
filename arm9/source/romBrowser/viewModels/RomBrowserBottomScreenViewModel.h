@@ -18,6 +18,7 @@ public:
     {
         auto state = _romBrowserController->GetStateMachine().GetCurrentState();
         return state == RomBrowserState::Browser
+            || state == RomBrowserState::Search
             || state == RomBrowserState::GameInfo
             || state == RomBrowserState::Cheats
             || state == RomBrowserState::CheatDescription

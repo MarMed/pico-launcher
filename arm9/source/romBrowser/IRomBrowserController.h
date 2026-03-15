@@ -20,8 +20,13 @@ public:
     virtual void LaunchFile(const FileInfo& fileInfo) = 0;
     virtual void ShowGameInfo(const FileInfo& fileInfo) = 0;
     virtual void HideGameInfo() = 0;
+    virtual void ShowSearch() = 0;
+    virtual void HideSearch() = 0;
     virtual void ShowDisplaySettings() = 0;
     virtual void HideDisplaySettings() = 0;
+    virtual const char* GetSearchQuery() const = 0;
+    virtual void SetSearchQuery(const char* query) = 0;
+
     virtual void ShowDisplayInfo() = 0;
     virtual void HideDisplayInfo() = 0;
     virtual void ToggleFavoritesView() = 0;

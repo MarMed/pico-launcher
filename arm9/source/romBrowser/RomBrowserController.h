@@ -16,6 +16,8 @@
 class RomBrowserController : public IRomBrowserController
 {
 public:
+    static constexpr int SEARCH_QUERY_MAX_LENGTH = 24;
+
     RomBrowserController(IAppSettingsService* appSettingsService,
         TaskQueueBase* ioTaskQueue, TaskQueueBase* bgTaskQueue);
 
@@ -25,6 +27,11 @@ public:
     void LaunchFile(const FileInfo& fileInfo) override;
     void ShowGameInfo(const FileInfo& fileInfo) override;
     void HideGameInfo() override;
+    void ShowSearch() override;
+    void HideSearch() override;
+    const char* GetSearchQuery() const override { return _searchQuery; }
+    void SetSearchQuery(const char* query) override;
+
     void ShowCheats() override;
     void HideCheats() override;
     void ShowCheatDescription(const char* cheatName, const char* description, const char* gameCode, u32 crc,
@@ -126,6 +133,7 @@ private:
     RomBrowserStateMachine _stateMachine;
     TCHAR _navigatePath[256];
     TCHAR* _navigateFileName;
+    char _searchQuery[SEARCH_QUERY_MAX_LENGTH + 1] = { 0 };
     FileInfo _launchFileInfo;
     char _cheatName[128];
     char _cheatDescription[384];
@@ -171,6 +179,10 @@ private:
     void ScheduleMetadataScan();
     void HandleLaunchTrigger();
     void HandleChangeDisplayModeTrigger();
+    void HandleChangeSearchQueryTrigger();
+    void ClearSearchQuery();
+    const char* GetSelectedFileName() const;
+
     void StartFavoritesLoad();
     void CompleteFavoritesLoad();
     bool TryBuildFilePath(const FileInfo& fileInfo, char* outPath, u32 outPathSize) const;

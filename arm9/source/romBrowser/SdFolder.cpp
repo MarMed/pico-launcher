@@ -3,6 +3,47 @@
 #include <algorithm>
 #include "SdFolder.h"
 
+static char ToLowerAscii(char c)
+{
+    if (c >= 'A' && c <= 'Z')
+    {
+        return c - 'A' + 'a';
+    }
+
+    return c;
+}
+
+static bool ContainsSubstringCaseInsensitiveAscii(const char* haystack, const char* needle)
+{
+    if (!needle || needle[0] == 0)
+    {
+        return true;
+    }
+    if (!haystack)
+    {
+        return false;
+    }
+
+    for (const char* haystackStart = haystack; *haystackStart; haystackStart++)
+    {
+        const char* haystackCur = haystackStart;
+        const char* needleCur = needle;
+        while (*haystackCur && *needleCur
+            && ToLowerAscii(*haystackCur) == ToLowerAscii(*needleCur))
+        {
+            haystackCur++;
+            needleCur++;
+        }
+
+        if (*needleCur == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 SdFolder::SdFolder(FileInfo** files, int fileCount)
     : _files(files), _fileCount(fileCount) { }
 
@@ -22,7 +63,8 @@ std::unique_ptr<const FileInfo*[]> SdFolder::FilterAndSort(
     {
         const FileInfo* file = _files[i];
         auto classification = file->GetFileType()->GetClassification();
-        if (classification != FileTypeClassification::Unknown)
+        if (classification != FileTypeClassification::Unknown
+            && ContainsSubstringCaseInsensitiveAscii(file->GetFileName(), filterSortParams.searchQuery))
         {
             sortedFilteredFiles[filteredCount++] = file;
         }

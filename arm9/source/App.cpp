@@ -27,6 +27,7 @@
 #include "romBrowser/views/NdsGameDetailsBottomSheetView.h"
 #include "romBrowser/views/cheats/CheatsBottomSheetView.h"
 #include "romBrowser/views/DisplaySettingsBottomSheetView.h"
+#include "romBrowser/views/SearchBottomSheetView.h"
 #include "romBrowser/views/InfoBottomSheetView.h"
 #include "romBrowser/views/LayoutEditorBottomSheetView.h"
 #include "romBrowser/views/QuickMenuBottomSheetView.h"
@@ -104,6 +105,7 @@ App::App(IAppSettingsService& appSettingsService, IBgmService& bgmService)
         25, 8)
     , _romBrowserController(&appSettingsService, &_ioTaskQueue, &_bgTaskQueue)
     , _displaySettingsBottomSheetViewModel(&_romBrowserController)
+    , _searchBottomSheetViewModel(&_romBrowserController)
     , _romBrowserBottomScreenViewModel(&_romBrowserController)
     , _dialogPresenter(&_focusManager, &_mainObjDialogVram)
     , _quickMenuPresenter(&_focusManager, &_mainObjDialogVram) { }
@@ -387,6 +389,16 @@ void App::HandleTrigger(RomBrowserStateTrigger trigger, RomBrowserState newState
             HandleHideDisplaySettingsTrigger();
             break;
         }
+        case RomBrowserStateTrigger::ShowSearch:
+        {
+            HandleShowSearchTrigger();
+            break;
+        }
+        case RomBrowserStateTrigger::HideSearch:
+        {
+            HandleHideSearchTrigger();
+            break;
+        }
         case RomBrowserStateTrigger::ShowDisplayInfo:
         {
             HandleShowDisplayInfoTrigger();
@@ -450,6 +462,11 @@ void App::HandleTrigger(RomBrowserStateTrigger trigger, RomBrowserState newState
         case RomBrowserStateTrigger::ChangeDisplayMode:
         {
             _changeDisplayMode = true;
+            break;
+        }
+        case RomBrowserStateTrigger::ChangeSearchQuery:
+        {
+            HandleChangeSearchQueryTrigger();
             break;
         }
     }
@@ -620,6 +637,20 @@ void App::HandleHideDisplayInfoTrigger()
         _romBrowserBottomScreenView->Focus(_focusManager);
 }
 
+void App::HandleShowSearchTrigger()
+{
+    auto searchDialog = std::make_unique<SearchBottomSheetView>(
+        &_searchBottomSheetViewModel, &_theme->GetMaterialColorScheme(), _theme->GetFontRepository());
+    _dialogPresenter.ShowDialog(std::move(searchDialog));
+}
+
+void App::HandleHideSearchTrigger()
+{
+    _dialogPresenter.CloseDialog();
+    if (!_dialogPresenter.GetOldFocus())
+        _romBrowserBottomScreenView->Focus(_focusManager);
+}
+
 void App::HandleShowLayoutEditorTrigger()
 {
     if (!_quickMenuPresenter.IsIdle())
@@ -650,7 +681,6 @@ void App::HandleHideLayoutEditorTrigger()
         RestoreDirectMenuAccessFocus();
         return;
     }
-
     if (!_dialogPresenter.GetOldFocus())
         _romBrowserBottomScreenView->Focus(_focusManager);
 }
@@ -813,6 +843,13 @@ void App::HandleNavigateTrigger()
 
 void App::HandleFolderLoadDoneTrigger()
 {
+    RefreshRomBrowserViews();
+    if (!_focusManager.GetCurrentFocus())
+        _romBrowserBottomScreenView->Focus(_focusManager);
+}
+
+void App::RefreshRomBrowserViews()
+{
     DrainTaskQueues();
 
     ClearRetainedRomBrowserFocus(false);
@@ -822,7 +859,6 @@ void App::HandleFolderLoadDoneTrigger()
     {
         _focusManager.Unfocus();
     }
-
     _romBrowserTopScreenView.reset();
     RestoreVramState(_vramStateAfterMakeBottomScreenView);
     auto displayMode = RomBrowserDisplayModeFactory().GetRomBrowserDisplayMode(
@@ -838,8 +874,11 @@ void App::HandleFolderLoadDoneTrigger()
         &_layoutService);
     _romBrowserTopScreenView->InitVram(_subVramContext);
     _romBrowserBottomScreenView->RomBrowserViewModelInvalidated(_mainVramContext);
-    if (!_focusManager.GetCurrentFocus())
-        _romBrowserBottomScreenView->Focus(_focusManager);
+}
+
+void App::HandleChangeSearchQueryTrigger()
+{
+    RefreshRomBrowserViews();
 }
 
 void App::HandleRomBrowserViewModelInvalidated()
@@ -999,6 +1038,7 @@ bool App::IsRomBrowserVisible() const
     const auto& stateMachine = _romBrowserController.GetStateMachine();
     auto curState = stateMachine.GetCurrentState();
     return curState == RomBrowserState::Browser
+        || curState == RomBrowserState::Search
         || curState == RomBrowserState::GameInfo
         || curState == RomBrowserState::Cheats
         || curState == RomBrowserState::CheatDescription
