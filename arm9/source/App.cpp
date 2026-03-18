@@ -88,6 +88,43 @@ static bool IsViewInside(const View* view, const View* root)
     return false;
 }
 
+static bool HasFileExtensionIgnoreCase(const char* path, const char* ext)
+{
+    if (!path || !ext)
+        return false;
+
+    size_t len = strlen(path);
+    size_t extLen = strlen(ext);
+    if (len < extLen)
+        return false;
+
+    const char* tail = path + len - extLen;
+    for (size_t i = 0; i < extLen; i++)
+    {
+        char a = tail[i];
+        char b = ext[i];
+        if (a >= 'A' && a <= 'Z') a = a - 'A' + 'a';
+        if (b >= 'A' && b <= 'Z') b = b - 'A' + 'a';
+        if (a != b)
+            return false;
+    }
+
+    return true;
+}
+
+static bool IsNdsFamilyRomFile(const FileInfo& fileInfo)
+{
+    const FileType* fileType = fileInfo.GetFileType();
+    const char* name = fileInfo.GetFullPath();
+    if (!name)
+        name = fileInfo.GetFileName();
+
+    return (fileType && strcmp(fileType->GetShortName(), "nds") == 0)
+        || HasFileExtensionIgnoreCase(name, ".nds")
+        || HasFileExtensionIgnoreCase(name, ".dsi")
+        || HasFileExtensionIgnoreCase(name, ".srl");
+}
+
 App::App(IAppSettingsService& appSettingsService, IBgmService& bgmService)
     : _mainObjPltt(GFX_PLTT_OBJ_MAIN)
     , _mainObjVram(GFX_OBJ_MAIN)
@@ -239,6 +276,7 @@ void App::Run()
 
     _chipViewVram = ChipView::UploadGraphics(_mainObjVram);
     _iconButtonViewVram = IconButton2DView::UploadGraphics(_mainObjVram);
+    _displaySettingsIconVram = DisplaySettingsBottomSheetView::UploadIconGraphics(_mainObjVram);
 
     mem_setVramEMapping(MEM_VRAM_E_LCDC);
     _rgb6Palette.UploadGraphics(_mainVramContext);
@@ -584,6 +622,7 @@ void App::HandleShowDisplaySettingsTrigger()
         _theme->GetFontRepository(), &_appSettingsService,
         _effectiveThemeName.GetString());
     displaySettingsDialog->SetGraphics(_iconButtonViewVram);
+    displaySettingsDialog->SetIconGraphics(_displaySettingsIconVram);
     _dialogPresenter.ShowDialog(std::move(displaySettingsDialog));
 }
 
@@ -687,21 +726,26 @@ void App::HandleHideLayoutEditorTrigger()
 
 void App::HandleShowQuickMenuTrigger()
 {
-    if (_quickMenuPresenter.IsIdle()
+    const bool recaptureMenuReturnFocus = _quickMenuPresenter.IsIdle()
+        || !_quickMenuPresenter.GetOldFocus();
+    if (recaptureMenuReturnFocus
         && _romBrowserBottomScreenView->IsAppBarFocused(_focusManager))
     {
         _directMenuAccessReturnToAppBar = true;
         _directMenuAccessReturnAppBarButton =
             _romBrowserBottomScreenView->GetFocusedAppBarButton(_focusManager);
     }
-    else if (_quickMenuPresenter.IsIdle())
+    else if (recaptureMenuReturnFocus)
     {
         _directMenuAccessReturnToAppBar = false;
     }
 
+    const bool focusOnRomItem = _romBrowserBottomScreenView
+        && _romBrowserBottomScreenView->IsViewInsideRomBrowser(_focusManager.GetCurrentFocus());
+
     const FileInfo* selectedFileInfo = nullptr;
     auto viewModel = _romBrowserController.GetRomBrowserViewModel();
-    if (viewModel.IsValid())
+    if (focusOnRomItem && viewModel.IsValid())
     {
         int selectedIndex = viewModel->GetSelectedItem();
         if (selectedIndex >= 0 && selectedIndex < (int)viewModel->GetFileInfoManager().GetItemCount())
@@ -721,32 +765,8 @@ void App::HandleShowQuickMenuTrigger()
                 selectedFileInfo->GetFileType(), selectedFileInfo->GetFastFileRef(),
                 selectedFileInfo->GetFullPath());
             _romBrowserController.SetActiveFile(selectedFileInfoCopy);
+            isNdsRom = IsNdsFamilyRomFile(*selectedFileInfo);
         }
-        const char* name = selectedFileInfo->GetFullPath();
-        if (!name)
-            name = selectedFileInfo->GetFileName();
-        auto hasExt = [] (const char* path, const char* ext)
-        {
-            if (!path)
-                return false;
-            size_t len = strlen(path);
-            size_t extLen = strlen(ext);
-            if (len < extLen)
-                return false;
-            const char* tail = path + len - extLen;
-            for (size_t i = 0; i < extLen; i++)
-            {
-                char a = tail[i];
-                char b = ext[i];
-                if (a >= 'A' && a <= 'Z') a = a - 'A' + 'a';
-                if (b >= 'A' && b <= 'Z') b = b - 'A' + 'a';
-                if (a != b)
-                    return false;
-            }
-            return true;
-        };
-        isNdsRom = fileType == &NdsFileType::sInstance
-            || hasExt(name, ".nds") || hasExt(name, ".dsi") || hasExt(name, ".srl");
     }
 
     auto quickMenuDialog = std::make_unique<QuickMenuBottomSheetView>(
@@ -763,7 +783,7 @@ void App::HandleHideQuickMenuTrigger()
     if (opensDialog)
     {
         View* transferredFocus = _quickMenuPresenter.DetachOldFocus();
-        _quickMenuPresenter.DismissImmediately();
+        _quickMenuPresenter.CloseUpward();
         if (transferredFocus)
             _dialogPresenter.SetOldFocus(transferredFocus);
     }
@@ -1086,19 +1106,28 @@ void App::Update()
     if (isRomBrowserVisible && !_exit && curState != RomBrowserState::Launching)
     {
         const bool quickMenuActive = !_quickMenuPresenter.IsIdle();
-        const bool blockNonBInput = _dialogPresenter.IsTransitioning()
-            || _quickMenuPresenter.IsTransitioning();
+        const bool blockNonBInput = _dialogPresenter.ShouldBlockNonBInput()
+            || _quickMenuPresenter.ShouldBlockNonBInput();
         auto* currentDialog = _dialogPresenter.GetCurrentDialog();
         const MaskedInputProvider bOnlyInput(_inputRepeater, InputKey::B);
         const InputProvider& activeInput = blockNonBInput
             ? static_cast<const InputProvider&>(bOnlyInput)
             : static_cast<const InputProvider&>(_inputRepeater);
+        bool handledBlockedBInput = false;
 
-        if (quickMenuActive && !_focusManager.GetCurrentFocus())
+        if (blockNonBInput)
+        {
+            if (_quickMenuPresenter.CanInterruptOpeningWithB())
+                handledBlockedBInput = _quickMenuPresenter.HandleInput(bOnlyInput, _focusManager);
+            else if (_dialogPresenter.CanInterruptOpeningWithB() && currentDialog)
+                handledBlockedBInput = currentDialog->HandleInput(bOnlyInput, _focusManager);
+        }
+
+        if (!handledBlockedBInput && quickMenuActive && !_focusManager.GetCurrentFocus())
             _quickMenuPresenter.HandleInput(activeInput, _focusManager);
-        else if (currentDialog && !_focusManager.GetCurrentFocus())
+        else if (!handledBlockedBInput && currentDialog && !_focusManager.GetCurrentFocus())
             currentDialog->HandleInput(activeInput, _focusManager);
-        else if (!blockNonBInput)
+        else if (!handledBlockedBInput && !blockNonBInput)
             _focusManager.Update(_inputRepeater);
 
         if (!blockNonBInput)

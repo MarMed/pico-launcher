@@ -8,11 +8,29 @@
 #include "bottomSheetBg.h"
 #include "QuickMenuPresenter.h"
 
+namespace
+{
+    constexpr u32 kOpeningInputUnlockProgressNumerator = 1;
+    constexpr u32 kOpeningInputUnlockProgressDenominator = 2;
+    constexpr u32 kClosingInputUnlockProgressNumerator = 2;
+    constexpr u32 kClosingInputUnlockProgressDenominator = 3;
+
+    bool HasReachedInputUnlockPoint(
+        const Animator<int>& animator, u32 numerator, u32 denominator)
+    {
+        const u32 duration = animator.GetDuration();
+        if (duration == 0)
+            return true;
+
+        return animator.GetFrame() * denominator >= duration * numerator;
+    }
+}
+
 QuickMenuPresenter::QuickMenuPresenter(FocusManager* focusManager, StackVramManager* vramManager)
     : _focusManager(focusManager)
     , _vramManager(vramManager)
     , _scrimAnimator(0)
-    , _yAnimator(kHiddenY)
+    , _yAnimator(kHiddenBottomY)
 {
     _baseVramState = _vramManager->GetState();
 }
@@ -26,15 +44,30 @@ void QuickMenuPresenter::ClearBg1Map()
 
 void QuickMenuPresenter::Show(std::unique_ptr<QuickMenuBottomSheetView> view)
 {
-    if (_currentView)
+    if (!view)
         return;
+
+    const bool reopeningWhileClosing = _currentView && _state == State::Closing;
+    if (_currentView && !reopeningWhileClosing)
+        return;
+
+    int startY = kHiddenBottomY;
+    int startScrimBlend = 0;
+    if (reopeningWhileClosing)
+    {
+        startY = _yAnimator.GetValue();
+        startScrimBlend = _scrimAnimator.GetValue();
+
+        if (_focusManager->IsFocusInside(_currentView.get()))
+            _focusManager->Unfocus();
+    }
 
     _currentView = std::move(view);
     _initVram = true;
     _scrimTargetBlend = _currentView->GetScrimTargetBlend();
-    _yAnimator = Animator<int>(kHiddenY);
-    _scrimAnimator = Animator<int>(0);
-    _currentView->SetPosition(0, kHiddenY);
+    _yAnimator = Animator<int>(startY);
+    _scrimAnimator = Animator<int>(startScrimBlend);
+    _currentView->SetPosition(0, startY);
 
     ClearBg1Map();
     BeginOpen();
@@ -45,7 +78,15 @@ void QuickMenuPresenter::Close()
     if (!_currentView || _state == State::Closing)
         return;
 
-    BeginClose();
+    BeginClose(kHiddenBottomY);
+}
+
+void QuickMenuPresenter::CloseUpward()
+{
+    if (!_currentView || _state == State::Closing)
+        return;
+
+    BeginClose(kHiddenTopY);
 }
 
 void QuickMenuPresenter::DismissImmediately()
@@ -64,9 +105,19 @@ void QuickMenuPresenter::DismissImmediately()
     _initVram = false;
     _state = State::Idle;
     _scrimAnimator = Animator<int>(0);
-    _yAnimator = Animator<int>(kHiddenY);
+    _yAnimator = Animator<int>(kHiddenBottomY);
     ClearBg1Map();
     REG_BLDALPHA = (16 << 8) | 0;
+}
+
+void QuickMenuPresenter::RestoreOldFocus()
+{
+    if (!_oldFocus)
+        return;
+
+    _focusManager->Focus(_oldFocus);
+    _oldFocus->SetVisualFocusRetained(false);
+    _oldFocus = nullptr;
 }
 
 void QuickMenuPresenter::BeginOpen()
@@ -86,12 +137,12 @@ void QuickMenuPresenter::BeginOpen()
     _currentView->Focus(*_focusManager);
 }
 
-void QuickMenuPresenter::BeginClose()
+void QuickMenuPresenter::BeginClose(int hiddenY)
 {
     _state = State::Closing;
     _scrimAnimator.Goto(0, md::sys::motion::duration::short3,
         &md::sys::motion::easing::emphasizedAccelerate);
-    _yAnimator.Goto(kHiddenY, md::sys::motion::duration::short3,
+    _yAnimator.Goto(hiddenY, md::sys::motion::duration::short3,
         &md::sys::motion::easing::emphasizedAccelerate);
 }
 
@@ -109,18 +160,17 @@ void QuickMenuPresenter::Update()
     }
     else if (_state == State::Closing)
     {
+        if (_oldFocus && HasReachedInputUnlockPoint(_yAnimator,
+            kClosingInputUnlockProgressNumerator, kClosingInputUnlockProgressDenominator))
+            RestoreOldFocus();
+
         if (!_yAnimator.IsFinished())
             _yAnimator.Update();
         if (_yAnimator.IsFinished())
         {
             _state = State::Idle;
             _currentView.reset();
-            if (_oldFocus)
-            {
-                _focusManager->Focus(_oldFocus);
-                _oldFocus->SetVisualFocusRetained(false);
-                _oldFocus = nullptr;
-            }
+            RestoreOldFocus();
             return;
         }
     }
@@ -161,7 +211,13 @@ void QuickMenuPresenter::VBlank()
 
 bool QuickMenuPresenter::HandleInput(const InputProvider& inputProvider, FocusManager& focusManager)
 {
-    if (!_currentView || _state != State::Visible)
+    if (!_currentView)
+        return false;
+
+    if (_state == State::Opening && inputProvider.Triggered(InputKey::B))
+        return _currentView->HandleInput(inputProvider, focusManager);
+
+    if (_state != State::Visible)
         return false;
 
     return _currentView->HandleInput(inputProvider, focusManager);
@@ -183,4 +239,21 @@ bool QuickMenuPresenter::HandleTouch(const TouchEvent& event, FocusManager& focu
         _currentView->OnDismissed();
 
     return true;
+}
+
+bool QuickMenuPresenter::ShouldBlockNonBInput() const
+{
+    if (_state == State::Opening)
+    {
+        return !HasReachedInputUnlockPoint(_yAnimator,
+            kOpeningInputUnlockProgressNumerator, kOpeningInputUnlockProgressDenominator);
+    }
+
+    if (_state == State::Closing)
+    {
+        return !HasReachedInputUnlockPoint(_yAnimator,
+            kClosingInputUnlockProgressNumerator, kClosingInputUnlockProgressDenominator);
+    }
+
+    return false;
 }

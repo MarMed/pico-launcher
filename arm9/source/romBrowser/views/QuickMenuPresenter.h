@@ -16,6 +16,7 @@ public:
 
     void Show(std::unique_ptr<QuickMenuBottomSheetView> view);
     void Close();
+    void CloseUpward();
     void Update();
     void Draw(GraphicsContext& graphicsContext);
     void VBlank();
@@ -26,7 +27,8 @@ public:
 
     bool IsIdle() const { return _state == State::Idle; }
     bool IsActive() const { return _state != State::Idle; }
-    bool IsTransitioning() const { return _state == State::Opening || _state == State::Closing; }
+    bool ShouldBlockNonBInput() const;
+    bool CanInterruptOpeningWithB() const { return _currentView && _state == State::Opening; }
 
     void ClearOldFocus()
     {
@@ -52,8 +54,9 @@ private:
     };
 
     void BeginOpen();
-    void BeginClose();
+    void BeginClose(int hiddenY);
     void ClearBg1Map();
+    void RestoreOldFocus();
 
 private:
     FocusManager* _focusManager;
@@ -67,6 +70,7 @@ private:
     int _scrimTargetBlend = 0;
     State _state = State::Idle;
 
-    static constexpr int kHiddenY = 192;
+    static constexpr int kHiddenBottomY = 192;
+    static constexpr int kHiddenTopY = -192;
     static constexpr int kVisibleY = 6;
 };

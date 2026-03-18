@@ -26,12 +26,13 @@
 #include "romBrowser/viewModels/SearchViewModel.h"
 #include "romBrowser/views/RomBrowserBottomScreenView.h"
 #include "romBrowser/views/RomBrowserTopScreenView.h"
+#include "romBrowser/views/DisplaySettingsBottomSheetView.h"
 #include "romBrowser/views/IconButton2DView.h"
 #include "romBrowser/views/ChipView.h"
 #include "romBrowser/views/QuickMenuPresenter.h"
 #include "romBrowser/Theme/Material/MaterialThemeFileIconFactory.h"
 #include "romBrowser/RomBrowserController.h"
-#include "romBrowser/layout/LayoutService.h"
+#include "services/Layout/LayoutService.h"
 #include "DialogPresenter.h"
 #include "themes/ITheme.h"
 #include "core/SharedPtr.h"
@@ -134,6 +135,7 @@ private:
 
     ChipView::VramToken _chipViewVram;
     IconButton2DView::VramToken _iconButtonViewVram;
+    DisplaySettingsBottomSheetView::IconVramToken _displaySettingsIconVram;
 
     bool _vcountIrqStarted = false;
 
